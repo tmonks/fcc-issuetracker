@@ -11,11 +11,6 @@
 const expect = require("chai").expect;
 const mongoose = require("mongoose");
 
-//var MongoClient = require('mongodb');
-//var ObjectId = require('mongodb').ObjectID;
-
-const CONNECTION_STRING = process.env.DB; //MongoClient.connect(CONNECTION_STRING, function(err, db) {});
-
 const issueSchema = new mongoose.Schema({
   project: { type: String, required: true },
   issue_title: { type: String, required: true },
@@ -32,15 +27,16 @@ const Issue = mongoose.model("Issue", issueSchema);
 module.exports = app => {
   app
     .route("/api/issues/:project")
+    
+    // POST new issues
     .post((req, res) => {
       const project = req.params.project;
       if (!project) {
         res.send("No project provided");
         return;
       }
-      console.log("New issue received for " + project);
-      console.log(req.body);
 
+      // return an error if one or more of the required inputs isn't provided
       if (
         !req.body.issue_title ||
         !req.body.issue_text ||
@@ -49,6 +45,7 @@ module.exports = app => {
         res.send("missing inputs");
         return;
       }
+    
       const newIssue = new Issue({
         project,
         issue_title: req.body.issue_title,
@@ -63,28 +60,23 @@ module.exports = app => {
           console.log(err);
           res.json({ error: err.name });
         } else {
-          console.log(
-            "New issue (" + req.body.issue_title + ") saved successfully"
-          );
           res.json(data);
         }
       });
     })
 
-    // Retrieve array of optionally filtered issues
+    // GET an array of optionally filtered issues
     .get(async (req, res) => {
       const project = req.params.project;
-      console.log("GET request received for " + project);
-  
+
       if (!project) {
-        res.send("No project provided");
+        res.send("no project provided");
         return;
       }
-    
-      // add project from route parameter to query parameters
+
+      // create filter object from project and query parameters
       const filter = { ...req.query, project };
-      console.log("Using filter...", filter);
-    
+
       try {
         const issues = await Issue.find(filter, { __v: 0 });
         res.json(issues);
@@ -94,45 +86,47 @@ module.exports = app => {
       }
     })
 
-    // Update issues
+    // Update issues from PUT requests
     .put(async (req, res) => {
       const project = req.params.project;
-      const issueUpdate = { ...req.body };
-      const issueId = req.body._id;
-      
-      if (!project || !issueId) {
+      const issueUpdates = { ...req.body };
+      const _id = req.body._id;
+
+      if (!project || !_id) {
         res.send("Missing project or issue ID");
         return;
       }
+
+      // remove _id from the list of fields to update
+      delete issueUpdates["_id"];
     
-    //console.log("Request body for " + issueId, issueUpdate);
-    
-    delete issueUpdate["_id"];
       // remove any empty fields submitted
-      for (let key in issueUpdate) {
-        if (issueUpdate[key] === "") {
-          delete issueUpdate[key];
+      for (let key in issueUpdates) {
+        if (issueUpdates[key] === "") {
+          delete issueUpdates[key];
         }
       }
-    
-    // console.log("After cleanup... " + Object.keys(issueUpdate).length);
-      
-    // If there are no non-empty keys left to update, return error
-      if(Object.keys(issueUpdate).length === 0) {
+
+      // If there are no non-empty keys left to update, return error
+      if (Object.keys(issueUpdates).length === 0) {
         res.send("no updated field sent");
         return;
-      } 
-      issueUpdate["updated_on"] = Date.now();
-    
+      }
+      issueUpdates["updated_on"] = Date.now();
+
       try {
-        const updatedIssue = await Issue.findOneAndUpdate({ "_id": issueId }, issueUpdate, {new: true})
-        res.json("successfully updated");
-      } catch(err) {
+        const updatedIssue = await Issue.findOneAndUpdate(
+          { _id: _id },
+          issueUpdates,
+          { new: true }
+        );
+        res.send("successfully updated");
+      } catch (err) {
         console.log(err);
-        res.send("could not update " + issueId);
+        res.send("could not update " + _id);
       }
     })
-  
+
     // DELETE issues by _id
     .delete(async (req, res) => {
       console.log("Delete request received...", req.body);
@@ -141,51 +135,22 @@ module.exports = app => {
       if (!project) {
         res.send("Missing project");
         return;
-      } 
-      if(!_id) {
+      }
+      if (!_id) {
         res.send("_id error");
         return;
       }
-      
+
       try {
         let results = await Issue.findByIdAndRemove(_id);
-        console.log(results);
-        if(results) {
+        if (results) {
           res.send("deleted " + _id);
         } else {
           res.send("could not delete " + _id);
         }
-      } catch(err) {
+      } catch (err) {
         console.log(err);
         res.send("could not delete " + _id);
       }
-  });
-};
-
-/*
-module.exports = function (app) {
-
-  app.route('/api/issues/:project')
-  
-    .get(function (req, res){
-      var project = req.params.project;
-      
-    })
-    
-    .post(function (req, res){
-      var project = req.params.project;
-      
-    })
-    
-    .put(function (req, res){
-      var project = req.params.project;
-      
-    })
-    
-    .delete(function (req, res){
-      var project = req.params.project;
-      
     });
-    
 };
-*/
